@@ -11,7 +11,7 @@ load("Data/Full/bci.full6.rdata")
 load("Data/Full/bci.full7.rdata")
 load("Data/Species/bci.spptable.rdata")
 
-CENSUS_PAIR_COUNT <- 6
+CENSUS_COUNT <- 7
 
 shinyServer(function(input, output, session) {
   output$categoryNumerics <- renderUI({
@@ -53,11 +53,18 @@ shinyServer(function(input, output, session) {
   
   mort.data <- eventReactive(input$action,{
     mort.dataList = list();
-    output.catch(count <<- CENSUS_PAIR_COUNT)
+    #output.catch(count <<- CENSUS_PAIR_COUNT)
     surveyList = c(bci.full1, bci.full2, bci.full3, bci.full4, bci.full5, bci.full6, bci.full7)
-    
-    for(i in 1:count){
-      mort.dataList = append(mort.dataList, mortality.eachspp(surveyList[i], surveyList[i+1], classbreak = classes()))
+    censusList = c()
+    for(i in 1:CENSUS_COUNT)
+    {
+      append(censusList, surveyList[i][surveyList[i]$sp == speciesName(),])
+    }
+    for(i in 1:CENSUS_COUNT - 1){
+      for(j in i+1:CENSUS_COUNT){
+        mort.dataList = append(mort.dataList, mortality.eachspp(censusList[i], censusList[j], classbreak = classes()))
+      }
+      
     }
     
     return(mort.dataList)
@@ -65,7 +72,6 @@ shinyServer(function(input, output, session) {
   })
   
   dbhCatNum <- eventReactive(input$action, {
-    #validate(need(input$dbhNumSelect > 0, "Amount of dbh categories must be > 0"))
     input$dbhNumSelect
   })
   
@@ -73,16 +79,20 @@ shinyServer(function(input, output, session) {
   
   #Graph rendering function must be reimplemented
   output$speciesGraph <- renderPlot({
-    #mortdbh.graph(data=mort.data(),sp=speciesName(),xrange=c(0, input$xNum),yrange=c(0,input$yNum))
+    input$action
+    if(!is.null(mort.data()))
+    {
+      mortdbh.graph(data=mort.data()[1],sp=speciesName(),xrange=c(0, input$xNum),yrange=c(0,input$yNum))
+    }
   })
   
   #Species graphing function must be reimplemented
   mortdbh.graph=function(data,sp,xrange=NULL,yrange=NULL)
   {
-    #y=data$rate[sp,]
-    #aproblem=is.infinite(y)
-    #if(is.null(yrange)) yrange=c(0,max(y[!aproblem],na.rm=TRUE))
-    #if(is.null(xrange)) xrange=c(0,max(data$dbhmean[sp,],na.rm=TRUE))
-    #plot(data$dbhmean[sp,!aproblem],y[!aproblem],type='l',xlim=xrange,ylim=yrange,ylab=paste(sp,'mortality'),xlab='dbh')
+    y=data$rate
+    aproblem=is.infinite(y)
+    if(is.null(yrange)) yrange=c(0,max(y[!aproblem],na.rm=TRUE))
+    if(is.null(xrange)) xrange=c(0,max(data$dbhmean[sp,],na.rm=TRUE))
+    plot(data$dbhmean[sp,!aproblem],y[!aproblem],type='l',xlim=xrange,ylim=yrange,ylab=paste(sp,'mortality'),xlab='dbh')
   }
 })

@@ -6,9 +6,8 @@ shinyUI(fluidPage(
   sidebarLayout(
     
     sidebarPanel(
-      #Species select needs to be reimplemented.  Right now it acquires a list of species from mort.data AFTER calculation.  We need a list from the start.
-      #To do this, I think that we can just create a list of species by cycling through one of the surveys.
-      #selectInput("speciesSelect", label = "Please enter a species to graph", choices = rownames(mort.data()$N), selected = rownames(mort.data()$N)[1]),
+      capture.output(allspp <- sort(unique(bci.full1$sp))),
+      selectInput("speciesSelect", label = "Please enter a species to graph", choices = allspp, selected = allspp[1]),
       numericInput("dbhNumSelect", label = "Amount of dbh Categories", value = 3, min = 1, max = 10),
       uiOutput("categoryNumerics"),
       actionButton("action", label = "Apply Changes"),

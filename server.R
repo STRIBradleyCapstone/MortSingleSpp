@@ -2,16 +2,16 @@
 library(shiny)
 library(date)
 attach("Data/CTFSRPackage.rdata")
-load("Data/Full/bci.full1.rdata")
-load("Data/Full/bci.full2.rdata")
-load("Data/Full/bci.full3.rdata")
-load("Data/Full/bci.full4.rdata")
-load("Data/Full/bci.full5.rdata")
-load("Data/Full/bci.full6.rdata")
-load("Data/Full/bci.full7.rdata")
+load("Data/full/bci.full1.rdata")
+load("Data/full/bci.full2.rdata")
+load("Data/full/bci.full3.rdata")
+load("Data/full/bci.full4.rdata")
+load("Data/full/bci.full5.rdata")
+load("Data/full/bci.full6.rdata")
+load("Data/full/bci.full7.rdata")
 load("Data/Species/bci.spptable.rdata")
 
-CENSUS_PAIR_COUNT <- 6
+CENSUS_COUNT <- 7
 
 shinyServer(function(input, output, session) {
   output$categoryNumerics <- renderUI({
@@ -21,6 +21,10 @@ shinyServer(function(input, output, session) {
     lapply (1:amount, function(i){
       numericInput(paste0("category", i, "Num"), paste("category", i, sep=" "), value = 100*i, min = 0, max = 9999)
     })
+  })
+  
+  output$graphAction <- renderUI({
+    
   })
   
   output$xNumeric <- renderUI({
@@ -47,25 +51,65 @@ shinyServer(function(input, output, session) {
     return(classList)
   })
   
-  speciesName <- eventReactive(input$speciesAction,{
+  speciesName <- eventReactive(input$action,{
     input$speciesSelect
   })
   
+  survey1 <- eventReactive(input$plotAction,{
+    switch(input$survey1Select, 
+           "full1" = {return(bci.full1)},
+           "full2" = {return(bci.full2)},
+           "full3" = {return(bci.full3)},
+           "full4" = {return(bci.full4)},
+           "full5" = {return(bci.full5)},
+           "full6" = {return(bci.full6)})
+  })
+  survey2 <- eventReactive(input$plotAction,{
+    slist = c("full1", "full2", "full3", "full4", "full5", "full6", "full7")
+    #match function calculates the indices of each survey input within a list of all surveys
+    #Used to ensure that survey1 is less than survey2
+    validate(
+      need(match(input$survey1Select, slist) < match(input$survey2Select, slist), "First survey must have occurred before the second survey")
+    )
+    s<-switch(input$survey2Select,
+              "full2" = {return(bci.full2)},
+              "full3" = {return(bci.full3)},
+              "full4" = {return(bci.full4)},
+              "full5" = {return(bci.full5)},
+              "full6" = {return(bci.full6)},
+              "full7" = {return(bci.full7)})
+  })
+  
   mort.data <- eventReactive(input$action,{
-    mort.dataList = list();
-    output.catch(count <<- CENSUS_PAIR_COUNT)
-    surveyList = c(bci.full1, bci.full2, bci.full3, bci.full4, bci.full5, bci.full6, bci.full7)
-    
-    for(i in 1:count){
-      mort.dataList = append(mort.dataList, mortality.eachspp(surveyList[i], surveyList[i+1], classbreak = classes()))
+    cat("mort.data\n")
+    mort.dataList = list()
+    cat("buildingCensusList\n")
+    censusList = c(list(bci.full1[bci.full1$sp == speciesName(), 1:20]),
+                   list(bci.full2[bci.full2$sp == speciesName(), 1:20]),
+                   list(bci.full3[bci.full3$sp == speciesName(), 1:20]),
+                   list(bci.full4[bci.full4$sp == speciesName(), 1:20]),
+                   list(bci.full5[bci.full5$sp == speciesName(), 1:20]),
+                   list(bci.full6[bci.full6$sp == speciesName(), 1:20]),
+                   list(bci.full7[bci.full7$sp == speciesName(), 1:20]))
+    cat("censusListBuilt\n")
+    for(i in 1:(CENSUS_COUNT - 1)){
+      cat("FirstLoop\n")
+      for(j in (i+1):CENSUS_COUNT){
+        cat("SecondLoop\n")
+        force(i)
+        force(j)
+        tempList = mortality.eachspp(censusList[[i]], censusList[[j]], classbreak = classes())
+        mort.dataList = append(mort.dataList, list(tempList))
+        cat("SecondLoopEnd\n")
+      }
+      
     }
-    
+    cat("MortDataEnd\n")
     return(mort.dataList)
     
   })
   
   dbhCatNum <- eventReactive(input$action, {
-    #validate(need(input$dbhNumSelect > 0, "Amount of dbh categories must be > 0"))
     input$dbhNumSelect
   })
   
@@ -73,16 +117,35 @@ shinyServer(function(input, output, session) {
   
   #Graph rendering function must be reimplemented
   output$speciesGraph <- renderPlot({
-    #mortdbh.graph(data=mort.data(),sp=speciesName(),xrange=c(0, input$xNum),yrange=c(0,input$yNum))
+    cat("plot\n")
+    if(!is.null(mort.data()))
+    {
+      cat("dataNotNull\n")
+      mortdbh.graph(data=mort.data()[[1]],sp=speciesName(),xrange=c(0, input$xNum),yrange=c(0,input$yNum))
+    }
+    else
+    {
+      cat("dataNull\n")
+    }
+    cat("plotEnd\n")
+  })
+  
+  output$table <- renderTable({
+    if(!is.null(mort.data()))
+    {
+      assemble.demography(mort.data()[1],type="m",whichdbhcat=num)
+    }
   })
   
   #Species graphing function must be reimplemented
   mortdbh.graph=function(data,sp,xrange=NULL,yrange=NULL)
   {
-    #y=data$rate[sp,]
-    #aproblem=is.infinite(y)
-    #if(is.null(yrange)) yrange=c(0,max(y[!aproblem],na.rm=TRUE))
-    #if(is.null(xrange)) xrange=c(0,max(data$dbhmean[sp,],na.rm=TRUE))
-    #plot(data$dbhmean[sp,!aproblem],y[!aproblem],type='l',xlim=xrange,ylim=yrange,ylab=paste(sp,'mortality'),xlab='dbh')
+    y=data$rate
+    aproblem=is.infinite(y)
+    if(is.null(yrange)) yrange=c(0,max(y[!aproblem],na.rm=TRUE))
+    if(is.null(xrange)) xrange=c(0,max(data$dbhmean,na.rm=TRUE))
+    plot(data$dbhmean[!aproblem],y[!aproblem],type='l',xlim=xrange,ylim=yrange,ylab=paste(sp,'mortality'),xlab='dbh')
   }
+  
+ 
 })

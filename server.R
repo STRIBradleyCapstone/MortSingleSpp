@@ -23,8 +23,9 @@ shinyServer(function(input, output, session) {
     })
   })
   
-  output$graphAction <- renderUI({
-    
+  output$speciesSelect <- renderUI({
+    capture.output(allspp <- sort(unique(bci.full1$sp)))
+    selectInput("speciesSelect", label = "Please enter a species to graph", choices = allspp, selected = allspp[1])
   })
   
   output$xNumeric <- renderUI({
@@ -53,6 +54,34 @@ shinyServer(function(input, output, session) {
   
   speciesName <- eventReactive(input$action,{
     input$speciesSelect
+  })
+  
+  survey1 <- eventReactive(input$plotAction,{
+    switch(input$survey1Select, 
+           "full1" = {return(bci.full1)},
+           "full2" = {return(bci.full2)},
+           "full3" = {return(bci.full3)},
+           "full4" = {return(bci.full4)},
+           "full5" = {return(bci.full5)},
+           "full6" = {return(bci.full6)})
+  })
+  
+  survey2 <- eventReactive(input$plotAction,{
+    slist = c("full1", "full2", "full3", "full4", "full5", "full6", "full7")
+    #match function calculates the indices of each survey input within a list of all surveys
+    #Used to ensure that survey1 is less than survey2
+    cat("survey2Validate\n")
+    validate(
+      need(match(input$survey1Select, slist) < match(input$survey2Select, slist), "First survey must have occurred before the second survey")
+    )
+    cat("survey2ValidateEnd\n")
+    switch(input$survey2Select,
+              "full2" = {return(bci.full2)},
+              "full3" = {return(bci.full3)},
+              "full4" = {return(bci.full4)},
+              "full5" = {return(bci.full5)},
+              "full6" = {return(bci.full6)},
+              "full7" = {return(bci.full7)})
   })
   
   mort.data <- eventReactive(input$action,{

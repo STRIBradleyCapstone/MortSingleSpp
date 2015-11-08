@@ -2,13 +2,13 @@
 library(shiny)
 library(date)
 attach("Data/CTFSRPackage.rdata")
-load("Data/Full/bci.full1.rdata")
-load("Data/Full/bci.full2.rdata")
-load("Data/Full/bci.full3.rdata")
-load("Data/Full/bci.full4.rdata")
-load("Data/Full/bci.full5.rdata")
-load("Data/Full/bci.full6.rdata")
-load("Data/Full/bci.full7.rdata")
+load("Data/full/bci.full1.rdata")
+load("Data/full/bci.full2.rdata")
+load("Data/full/bci.full3.rdata")
+load("Data/full/bci.full4.rdata")
+load("Data/full/bci.full5.rdata")
+load("Data/full/bci.full6.rdata")
+load("Data/full/bci.full7.rdata")
 load("Data/Species/bci.spptable.rdata")
 
 CENSUS_COUNT <- 7
@@ -21,6 +21,10 @@ shinyServer(function(input, output, session) {
     lapply (1:amount, function(i){
       numericInput(paste0("category", i, "Num"), paste("category", i, sep=" "), value = 100*i, min = 0, max = 9999)
     })
+  })
+  
+  output$graphAction <- renderUI({
+    
   })
   
   output$xNumeric <- renderUI({
@@ -47,26 +51,35 @@ shinyServer(function(input, output, session) {
     return(classList)
   })
   
-  speciesName <- eventReactive(input$speciesAction,{
+  speciesName <- eventReactive(input$action,{
     input$speciesSelect
   })
   
   mort.data <- eventReactive(input$action,{
-    mort.dataList = list();
-    #output.catch(count <<- CENSUS_PAIR_COUNT)
-    surveyList = c(bci.full1, bci.full2, bci.full3, bci.full4, bci.full5, bci.full6, bci.full7)
-    censusList = c()
-    for(i in 1:CENSUS_COUNT)
-    {
-      append(censusList, surveyList[i][surveyList[i]$sp == speciesName(),])
-    }
-    for(i in 1:CENSUS_COUNT - 1){
-      for(j in i+1:CENSUS_COUNT){
-        mort.dataList = append(mort.dataList, mortality.eachspp(censusList[i], censusList[j], classbreak = classes()))
+    cat("mort.data\n")
+    mort.dataList = list()
+    cat("buildingCensusList\n")
+    censusList = c(list(bci.full1[bci.full1$sp == speciesName(), 1:20]),
+                   list(bci.full2[bci.full2$sp == speciesName(), 1:20]),
+                   list(bci.full3[bci.full3$sp == speciesName(), 1:20]),
+                   list(bci.full4[bci.full4$sp == speciesName(), 1:20]),
+                   list(bci.full5[bci.full5$sp == speciesName(), 1:20]),
+                   list(bci.full6[bci.full6$sp == speciesName(), 1:20]),
+                   list(bci.full7[bci.full7$sp == speciesName(), 1:20]))
+    cat("censusListBuilt\n")
+    for(i in 1:(CENSUS_COUNT - 1)){
+      cat("FirstLoop\n")
+      for(j in (i+1):CENSUS_COUNT){
+        cat("SecondLoop\n")
+        force(i)
+        force(j)
+        tempList = mortality.eachspp(censusList[[i]], censusList[[j]], classbreak = classes())
+        mort.dataList = append(mort.dataList, list(tempList))
+        cat("SecondLoopEnd\n")
       }
       
     }
-    
+    cat("MortDataEnd\n")
     return(mort.dataList)
     
   })
@@ -79,10 +92,23 @@ shinyServer(function(input, output, session) {
   
   #Graph rendering function must be reimplemented
   output$speciesGraph <- renderPlot({
-    input$action
+    cat("plot\n")
     if(!is.null(mort.data()))
     {
-      mortdbh.graph(data=mort.data()[1],sp=speciesName(),xrange=c(0, input$xNum),yrange=c(0,input$yNum))
+      cat("dataNotNull\n")
+      mortdbh.graph(data=mort.data()[[1]],sp=speciesName(),xrange=c(0, input$xNum),yrange=c(0,input$yNum))
+    }
+    else
+    {
+      cat("dataNull\n")
+    }
+    cat("plotEnd\n")
+  })
+  
+  output$table <- renderTable({
+    if(!is.null(mort.data()))
+    {
+      assemble.demography(mort.data()[1],type="m",whichdbhcat=num)
     }
   })
   
@@ -92,7 +118,9 @@ shinyServer(function(input, output, session) {
     y=data$rate
     aproblem=is.infinite(y)
     if(is.null(yrange)) yrange=c(0,max(y[!aproblem],na.rm=TRUE))
-    if(is.null(xrange)) xrange=c(0,max(data$dbhmean[sp,],na.rm=TRUE))
-    plot(data$dbhmean[sp,!aproblem],y[!aproblem],type='l',xlim=xrange,ylim=yrange,ylab=paste(sp,'mortality'),xlab='dbh')
+    if(is.null(xrange)) xrange=c(0,max(data$dbhmean,na.rm=TRUE))
+    plot(data$dbhmean[!aproblem],y[!aproblem],type='l',xlim=xrange,ylim=yrange,ylab=paste(sp,'mortality'),xlab='dbh')
   }
+  
+ 
 })

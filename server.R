@@ -56,14 +56,14 @@ shinyServer(function(input, output, session) {
     input$speciesSelect
   })
   
-  survey1 <- eventReactive(input$plotAction,{
+  survey1 <- eventReactive(input$action,{
     switch(input$survey1Select, 
-           "full1" = {return(bci.full1)},
-           "full2" = {return(bci.full2)},
-           "full3" = {return(bci.full3)},
-           "full4" = {return(bci.full4)},
-           "full5" = {return(bci.full5)},
-           "full6" = {return(bci.full6)})
+           "full1" = {return(1)},
+           "full2" = {return(2)},
+           "full3" = {return(3)},
+           "full4" = {return(4)},
+           "full5" = {return(5)},
+           "full6" = {return(6)})
   })
   
   survey2 <- eventReactive(input$plotAction,{
@@ -75,18 +75,19 @@ shinyServer(function(input, output, session) {
       need(match(input$survey1Select, slist) < match(input$survey2Select, slist), "First survey must have occurred before the second survey")
     )
     cat("survey2ValidateEnd\n")
+    #returns the census number -1 so that using it to subset mort.dataList will yield the correct subset.
     switch(input$survey2Select,
-              "full2" = {return(bci.full2)},
-              "full3" = {return(bci.full3)},
-              "full4" = {return(bci.full4)},
-              "full5" = {return(bci.full5)},
-              "full6" = {return(bci.full6)},
-              "full7" = {return(bci.full7)})
+           "full2" = {return(1)},
+           "full3" = {return(2)},
+           "full4" = {return(3)},
+           "full5" = {return(4)},
+           "full6" = {return(5)},
+           "full7" = {return(6)})
   })
   
-  mort.data <- eventReactive(input$action,{
+  mort.data <- eventReactive(input$plotAction,{
     cat("mort.data\n")
-    mort.dataList = list()
+    mort.dataList = matrix(list(), nrow = CENSUS_COUNT - 1, ncol = CENSUS_COUNT)
     cat("buildingCensusList\n")
     censusList = c(list(bci.full1[bci.full1$sp == speciesName(), 1:20]),
                    list(bci.full2[bci.full2$sp == speciesName(), 1:20]),
@@ -97,14 +98,12 @@ shinyServer(function(input, output, session) {
                    list(bci.full7[bci.full7$sp == speciesName(), 1:20]))
     cat("censusListBuilt\n")
     for(i in 1:(CENSUS_COUNT - 1)){
-      cat("FirstLoop\n")
       for(j in (i+1):CENSUS_COUNT){
-        cat("SecondLoop\n")
         force(i)
         force(j)
         tempList = mortality.eachspp(censusList[[i]], censusList[[j]], classbreak = classes())
-        mort.dataList = append(mort.dataList, list(tempList))
-        cat("SecondLoopEnd\n")
+        #templist["active"] = "N"
+        mort.dataList[[i,j - 1]] <- list(tempList)
       }
       
     }
@@ -112,6 +111,10 @@ shinyServer(function(input, output, session) {
     return(mort.dataList)
     
   })
+  
+  #observeEvent(input$plotAction, {
+  #  mort.data()[[survey1(), survey2()]]$active <- "Y"
+  #})
   
   dbhCatNum <- eventReactive(input$action, {
     input$dbhNumSelect
@@ -122,10 +125,11 @@ shinyServer(function(input, output, session) {
   #Graph rendering function must be reimplemented
   output$speciesGraph <- renderPlot({
     cat("plot\n")
-    if(!is.null(mort.data()))
+    plot(x=NULL,y=NULL,type='l',xlim=c(0, input$xNum),ylim=c(0, input$yNum),ylab=paste(speciesName(),'mortality'),xlab='dbh')
+    if(!is.null(mort.data()) && !is.null(survey2()))
     {
       cat("dataNotNull\n")
-      mortdbh.graph(data=mort.data()[[1]],sp=speciesName(),xrange=c(0, input$xNum),yrange=c(0,input$yNum))
+      mortdbh.graph(survey1(), survey2(),sp=speciesName(),xrange=c(0, input$xNum),yrange=c(0,input$yNum))
     }
     else
     {
@@ -137,19 +141,23 @@ shinyServer(function(input, output, session) {
   output$table <- renderTable({
     if(!is.null(mort.data()))
     {
-      assemble.demography(mort.data()[1],type="m",whichdbhcat=num)
+      assemble.demography(mort.data()[1,2],type="m",whichdbhcat=num)
     }
   })
   
   #Species graphing function must be reimplemented
-  mortdbh.graph=function(data,sp,xrange=NULL,yrange=NULL)
+  mortdbh.graph=function(census1, census2 ,sp,xrange=NULL,yrange=NULL)
   {
-    y=data$rate
+    cat("graphStart\n")
+    data = mort.data()[[census1, census2]]
+    y=data[[1]]$rate
     aproblem=is.infinite(y)
     if(is.null(yrange)) yrange=c(0,max(y[!aproblem],na.rm=TRUE))
-    if(is.null(xrange)) xrange=c(0,max(data$dbhmean,na.rm=TRUE))
-    plot(data$dbhmean[!aproblem],y[!aproblem],type='l',xlim=xrange,ylim=yrange,ylab=paste(sp,'mortality'),xlab='dbh')
+    if(is.null(xrange)) xrange=c(0,max(data[[1]]$dbhmean,na.rm=TRUE))
+    cat("graphing...\n")
+    lines(data[[1]]$dbhmean[!aproblem],y[!aproblem],type='l')
+    cat("graphEnd\n")
   }
   
- 
+  
 })

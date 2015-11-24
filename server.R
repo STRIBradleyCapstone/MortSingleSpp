@@ -93,7 +93,6 @@ shinyServer(function(input, output, session) {
   })
   
   mort.data <- eventReactive(input$action,{
-    graphMatrix <<- matrix("N", nrow = CENSUS_COUNT - 1, ncol = CENSUS_COUNT - 1)
     mort.dataList = matrix(list(), nrow = CENSUS_COUNT - 1, ncol = CENSUS_COUNT - 1)
     censusList = c(list(bci.full1[bci.full1$sp == speciesName(), 1:20]),
                    list(bci.full2[bci.full2$sp == speciesName(), 1:20]),

@@ -130,9 +130,10 @@ shinyServer(function(input, output, session) {
   
   observeEvent(input$plotAllAction, {
     graphMatrix <<- matrix("N", nrow = CENSUS_COUNT - 1, ncol = CENSUS_COUNT)
-    for(i in 1:CENSUS_COUNT)
+    for(i in 1:(CENSUS_COUNT-1))
     {
-      matrix[[i,i+1]] <- "Y"
+      force(i)
+      graphMatrix[[i,(i+1)]] <<- "Y"
     }
   })
   

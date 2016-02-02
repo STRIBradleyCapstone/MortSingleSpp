@@ -1,4 +1,3 @@
-.libPaths("Data")
 library(shiny)
 library(date)
 attach("Data/CTFSRPackage.rdata")

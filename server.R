@@ -13,40 +13,74 @@ load("Data/Species/bci.spptable.rdata")
 
 shinyServer(function(input, output, session) {
   
+  #Initializes a list of which census pairs are active.  All set to inactive ("N")
+  graphListInit <- function()
+  {
+    tempList = list()
+    for(i in 1:PAIR_COUNT)
+    {
+      tempList = append(tempList, "N")
+    }
+    return(tempList)
+  }
+  
+  #Calculates amount of possible census pairs
+  calcPairCount <- function()
+  {
+    return((CENSUS_COUNT * (CENSUS_COUNT -1)) / 2)
+  }
+  
   CENSUS_COUNT <- 7
-  graphMatrix = matrix("N", nrow = CENSUS_COUNT - 1, ncol = CENSUS_COUNT - 1)
-  colMatrix = matrix(c("#8b0000", 0, 0, 0, 0, 0,
-                       "#8b2323", "#8b4500", 0, 0, 0, 0,
-                       "#a52a2a", "#cd6600", "#8b6508", 0, 0, 0,
-                       "#CD3333", "#ee7600", "#cd950c", "#556b2f", 0, 0,
-                       "#ee3b3b", "#ff7f00", "#eead0e", "#6e8b3d", "#104e8b", 0,
-                       "#ff4040", "#ff8c00", "#ffb90f", "#bcee68", "#1c86ee", "#8968cd"), 
-                     nrow = CENSUS_COUNT - 1, ncol = CENSUS_COUNT - 1)
+  PAIR_COUNT <- calcPairCount()
+  graphList = graphListInit()
+  plotCount <- 1
+  lgndCount <- 1
+  cl <- rainbow(PAIR_COUNT)
+  lgnd <- vector(mode="character", length=1)
+  xMax <- 0
+  yMax <- 0
+  
+  #Species Selector
+  output$speciesSelect <- renderUI({
+    capture.output(allspp <- sort(unique(bci.full1$sp))) #Prevents output to user
+    selectInput("speciesSelect", label = "Please enter a species to graph", choices = allspp, selected = allspp[1])
+  })
+  
+  #Determines starting dbh category
+  dbhBase <- eventReactive(input$dbhAction, {
+    return(input$dbhBaseNumeric)
+  })
+  
+  #Determines gap between dbh categories
+  dbhGap <- eventReactive(input$dbhAction, {
+    return(input$dbhGapNumeric)
+  })
   
   output$categoryNumerics <- renderUI({
     amount = input$dbhNumSelect
     validate(need(amount > 1, "Amount of dbh categories must be > 1"))
-    validate(need(amount <= 10, "Amount of dbh categories must be <= 10"))
+    validate(need(amount <= 100, "Amount of dbh categories must be <= 100"))
     lapply (1:amount, function(i){
-      numericInput(paste0("category", i, "Num"), paste("category", i, sep=" "), value = 100*i, min = 0, max = 9999)
+      numericInput(paste0("category", i, "Num"), paste("category", i, sep=" "), value = dbhBase() + (dbhGap()*(i-1)), min = 0, max = 9999)
     })
   })
   
-  output$speciesSelect <- renderUI({
-    capture.output(allspp <- sort(unique(bci.full1$sp)))
-    selectInput("speciesSelect", label = "Please enter a species to graph", choices = allspp, selected = allspp[1])
+  output$xNumeric <- renderUI({
+    numericInput("xNum", "X Axis", value = xMax, max = 9999, step = 10)
   })
   
-  output$xNumeric <- renderUI({
-    numericInput("xNum", "X Axis", value = classes()[as.integer(isolate(dbhCatNum()))]+50, min = 50, max = 9999, step = 10)
+  output$yNumeric <- renderUI({
+    numericInput("yNum", "Y Axis", value = yMax, max = 9999, step = 0.05)
   })
   
   #Retrieves category values and stores the values locally.  
   #Runs each time category inputs are changed.
   classes <- eventReactive(input$action,{
-    amount = dbhCatNum()
+    xMax <<- 0
+    yMax <<- 0
+    amount = input$dbhNumSelect
     validate(need(amount > 1, "Amount of dbh categories must be > 1"))
-    validate(need(amount <= 10, "Amount of dbh categories must be <= 10"))
+    validate(need(amount <= 100, "Amount of dbh categories must be <= 100"))
     classList = c()
     for(i in 1:amount){
       num = input[[paste0("category", i, "Num")]]
@@ -84,16 +118,16 @@ shinyServer(function(input, output, session) {
     )
     #returns the census number -1 so that using it to subset mort.dataList will yield the correct subset.
     switch(input$survey2Select,
-           "full2" = {return(1)},
-           "full3" = {return(2)},
-           "full4" = {return(3)},
-           "full5" = {return(4)},
-           "full6" = {return(5)},
-           "full7" = {return(6)})
+           "full2" = {return(2)},
+           "full3" = {return(3)},
+           "full4" = {return(4)},
+           "full5" = {return(5)},
+           "full6" = {return(6)},
+           "full7" = {return(7)})
   })
   
   mort.data <- eventReactive(input$action,{
-    mort.dataList = matrix(list(), nrow = CENSUS_COUNT - 1, ncol = CENSUS_COUNT - 1)
+    mort.dataList = list()
     censusList = c(list(bci.full1[bci.full1$sp == speciesName(), 1:20]),
                    list(bci.full2[bci.full2$sp == speciesName(), 1:20]),
                    list(bci.full3[bci.full3$sp == speciesName(), 1:20]),
@@ -101,12 +135,15 @@ shinyServer(function(input, output, session) {
                    list(bci.full5[bci.full5$sp == speciesName(), 1:20]),
                    list(bci.full6[bci.full6$sp == speciesName(), 1:20]),
                    list(bci.full7[bci.full7$sp == speciesName(), 1:20]))
+    count = 1
     for(i in 1:(CENSUS_COUNT - 1)){
       for(j in (i+1):CENSUS_COUNT){
         force(i)
         force(j)
         tempList = mortality.eachspp(censusList[[i]], censusList[[j]], classbreak = classes())
-        mort.dataList[[i,j - 1]] <- list(tempList)
+        print(tempList)
+        mort.dataList[[count]] <- list(tempList)
+        count = count + 1
       }
       
     }
@@ -115,24 +152,35 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$plotAction, {
-    force(survey1())
-    force(survey2())
     if(!is.null(mort.data()))
     {
-      graphMatrix[[survey1(), survey2()]] <<- "Y"
+      graphList[[calcIndex(survey1(), survey2())]] <<- "Y"
     }
   })
   
   observeEvent(input$clearAction, {
-    graphMatrix <<- matrix("N", nrow = CENSUS_COUNT - 1, ncol = CENSUS_COUNT)
+    for(i in 1:PAIR_COUNT)
+    {
+      graphList[[i]] <<-"N"
+    }
+    xMax <<- 0
+    yMax <<- 0
+    updateNumericInput(session, "xNum", value = xMax)
+    updateNumericInput(session, "yNum", value = yMax)
+    plotCount <<- 1
+    lgndCount <<- 1
+    lgnd <<- vector(mode="character", length=1)
   })
   
   observeEvent(input$plotAllAction, {
-    graphMatrix <<- matrix("N", nrow = CENSUS_COUNT - 1, ncol = CENSUS_COUNT)
+    for(i in 1:PAIR_COUNT)
+    {
+      graphList[[i]] <<-"N"
+    }
     for(i in 1:(CENSUS_COUNT-1))
     {
       force(i)
-      graphMatrix[[i,(i+1)]] <<- "Y"
+      graphList[[calcIndex(i, (i+1))]] <<- "Y"
     }
   })
   
@@ -147,33 +195,60 @@ shinyServer(function(input, output, session) {
     input$clearAction
     input$plotAllAction
     plot(x=NULL,y=NULL,type='l',xlim=c(0, input$xNum),ylim=c(0, input$yNum),ylab=paste(speciesName(),'mortality'),xlab='dbh')
+    plotCount <<- 1
+    lgndCount <<- 1
+    lgnd <<- vector(mode="character", length=1)
     if(!is.null(mort.data()) && !is.null(survey2()))
     {
       for(i in 1:(CENSUS_COUNT-1)){
-        for(j in i:(CENSUS_COUNT-1)){
+        for(j in (i+1):(CENSUS_COUNT)){
           force(i)
           force(j)
-          print(graphMatrix[[i,j]])
-          if(graphMatrix[[i,j]] == "Y")
+          index = calcIndex(i,j)
+          if(graphList[[index]] == "Y")
           {
-            mortdbh.graph(i, j,sp=speciesName(),xrange=c(0, input$xNum),yrange=c(0,input$yNum))
+            mortdbh.graph(i, j,sp=speciesName(),xrange=c(0, input$xNum),yrange=c(0,input$yNum), index = index)
           }
         }
       }
-      
     }
   })
   
-  mortdbh.graph=function(census1, census2 ,sp,xrange=NULL,yrange=NULL)
+  mortdbh.graph=function(census1, census2, sp, xrange=NULL, yrange=NULL, index)
   {
-    par(col = colMatrix[[census1, census2]])
-    data = mort.data()[[census1, census2]]
+    z <- paste(census1,census2, sep="->")
+    lgnd[lgndCount] <<- z
+    data = mort.data()[[index]]
     y=data[[1]]$rate
     aproblem=is.infinite(y)
     if(is.null(yrange)) yrange=c(0,max(y[!aproblem],na.rm=TRUE))
     if(is.null(xrange)) xrange=c(0,max(data[[1]]$dbhmean,na.rm=TRUE))
-    lines(data[[1]]$dbhmean[!aproblem],y[!aproblem],type='l',lwd=2)
+    xTemp = max(data[[1]]$dbhmean[!aproblem], na.rm =TRUE)
+    if(xTemp > xMax)
+    {
+      xMax <<- xTemp
+      updateNumericInput(session, "xNum", value = floor(xMax * 1.05))
+    }
+    yTemp = max(y[!aproblem], na.rm = TRUE)
+    if(yTemp > yMax)
+    {
+      yMax <<- yTemp
+      updateNumericInput(session, "yNum", value = round(yMax * 1.1, digits = 2))
+    }
+    lines(data[[1]]$dbhmean[!aproblem],y[!aproblem],type='l',lwd=2, col = cl[plotCount])
+    legend('topright', legend = lgnd , lty=1, col = cl, cex=.75)
+    lgndCount <<- lgndCount + 1
+    plotCount <<- plotCount + 1
   }
   
-  
+  calcIndex <- function(s1, s2)
+  {
+    result = (s2 - (CENSUS_COUNT))
+    for(i in 1:s1)
+    {
+      force(i)
+      result = result + ((CENSUS_COUNT - 1) - (i-1))
+    }
+    return(result)
+  }
 })

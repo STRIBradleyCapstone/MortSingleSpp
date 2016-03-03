@@ -1,36 +1,30 @@
 library(shiny)
 library(date)
-attach("Data/CTFSRPackage.rdata")
+attach("../../data/CTFSRPackage.rdata")
 #load("../../data/CTFSRPackage/species/bci.spptable.rdata")
 
 shinyServer(function(input, output, session) {
   
   #Initializes a list of which census pairs are active.  All set to inactive ("N")
-  graphListInit <- function()
-  {
-    tempList = list()
-    for(i in 1:PAIR_COUNT)
-    {
-      tempList = append(tempList, "N")
-    }
-    return(tempList)
-  }
+  #graphListInit <- function()
+  #{
+  #  tempList = list()
+  #  for(i in 1:PAIR_COUNT())
+  #  {
+  #    tempList = append(tempList, "N")
+  #  }
+  #  return(tempList)
+  #}
   
   #Calculates amount of possible census pairs
-  calcPairCount <- function()
-  {
-    return((CENSUS_COUNT * (CENSUS_COUNT -1)) / 2)
-  }
+  #calcPairCount <- function()
+  #{
+  #  return((CENSUS_COUNT() * (CENSUS_COUNT() - 1)) / 2)
+  #}
   
   calcIndex <- function(s1, s2)
   {
-    result = (s2 - (CENSUS_COUNT))
-    for(i in 1:s1)
-    {
-      force(i)
-      result = result + ((CENSUS_COUNT) - (i))
-    }
-    return(result)
+    return ((s2 * (s2 - 1)) / 2 - s1 + 1)
   }
   
   #Region Selector
@@ -38,8 +32,8 @@ shinyServer(function(input, output, session) {
     allregions <- lapply(list.dirs(path)[-1], substring, nchar(path)+2)
     selectInput("regionSelect", label = "Select a region", choices = allregions, selected = allregions[1])
   })
-  
-  path <- "Data/full/"
+
+  path <- "../../data/CTFSRPackage/full/"
   census_list <- eventReactive(input$regionAction, {
     clist = list()
     for (name in list.files(paste0(path,"/",input$regionSelect))) {
@@ -48,7 +42,7 @@ shinyServer(function(input, output, session) {
     }
     #CENSUS_COUNT <<- length(clist)
     #PAIR_COUNT <<- (CENSUS_COUNT * (CENSUS_COUNT - 1)) / 2
-    validate(need(length(clist) > 1, "Region must contain at least two censuses"))
+    validate (need(length(clist) > 1, "Need at least two censuses"))
     return (clist)
     #load("../../data/CTFSRPackage/full/bci.full1.rdata")
     #load("../../data/CTFSRPackage/full/bci.full2.rdata")
@@ -60,29 +54,35 @@ shinyServer(function(input, output, session) {
     #return (c(list(bci.full1), list(bci.full2), list(bci.full3), list(bci.full4),
     #          list(bci.full5), list(bci.full6), list(bci.full7)))
   })
-  CENSUS_COUNT <- 7
-  PAIR_COUNT <- calcPairCount()
-  
-  graphList = graphListInit()
+  #CENSUS_COUNT <- 7
+  #PAIR_COUNT <- calcPairCount()
+  CENSUS_COUNT <- reactive ({
+    return (length(census_list()))
+  })
+  PAIR_COUNT <- reactive ({
+    new_count = ((CENSUS_COUNT() * (CENSUS_COUNT() - 1)) / 2)
+    tempList = list()
+    for(i in 1:new_count)
+    {
+      tempList = append(tempList, "N")
+    }
+    graphList <<- tempList
+    return (new_count)
+  })
+  graphList <- list()
   plotCount <- 1
   lgndCount <- 1
-  cl <- rainbow(PAIR_COUNT, end = .9)
+  cl <- reactive ({
+    return (rainbow(PAIR_COUNT(), end = .9))
+  })
   lgnd <- vector(mode="character", length=1)
   lgndColor <- vector(mode="character", length = 1)
   xMax <- 0
   yMax <- 0
-  
-  output$loadNotification <- renderUI({
-    helpText("")
-  })
-  
-  observeEvent(input$regionAction,{
-    #updateHelpTextInput(session, ,value = "Loading")
-  })
-  
+
   #Species Selector
   output$speciesSelect <- renderUI({
-    #capture.output(allspp <- sort(unique(bci.full1$sp))) #Prevents output to user
+   #capture.output(allspp <- sort(unique(bci.full1$sp))) #Prevents output to user
     capture.output(allspp <- sort(unique(census_list()[[1]]$sp))) #Prevents output to user
     selectInput("speciesSelect", label = "Please enter a species to graph", choices = allspp, selected = allspp[1])
   })
@@ -115,7 +115,7 @@ shinyServer(function(input, output, session) {
   })
   
   output$surveySlider <- renderUI({
-    sliderInput("surveySlider", "Please select surveys to plot", min = 1, max = CENSUS_COUNT, value = c(1,2), step = 1, ticks = FALSE)
+    sliderInput("surveySlider", "Please select surveys to plot", min = 1, max = CENSUS_COUNT(), value = c(1,2), step = 1, ticks = FALSE)
   })
   
   #Retrieves category values and stores the values locally.  
@@ -152,7 +152,7 @@ shinyServer(function(input, output, session) {
     #If the 2 points on the slider are set to the same value move one
     if(input$surveySlider[1] == input$surveySlider[2])
     {
-      if(input$surveySlider[2] == CENSUS_COUNT)
+      if(input$surveySlider[2] == CENSUS_COUNT())
       {
         surveyV[1] = surveyV[1] - 1
         updateSliderInput(session, "surveySlider", value = c(surveyV[1], surveyV[2]))
@@ -177,24 +177,18 @@ shinyServer(function(input, output, session) {
     #               list(bci.full6[bci.full6$sp == speciesName(), 1:20]),
     #               list(bci.full7[bci.full7$sp == speciesName(), 1:20]))
     censusList = list()
-    for(i in 1:CENSUS_COUNT){
+    for(i in 1:CENSUS_COUNT()){
       force(i)
-      tempList = data.frame(census_list()[[i]][census_list()[[i]]$sp == speciesName(), 1:20])
-      inc = tempList$DFstatus == 'alive'
-      #print(inc)
-      tempList = tempList[inc,]
-      print(tempList)
-      censusList = append(censusList, tempList)
-      #print(head(censusList))
+      censusList = append(censusList, (list(census_list()[[i]][census_list()[[i]]$sp == speciesName(), 1:20])))
     }
     count = 1
     cat("MortDataLoop")
-    for(i in 1:(CENSUS_COUNT - 1)){
-      for(j in (i+1):CENSUS_COUNT){
+    for(i in 1:(CENSUS_COUNT() - 1)){
+      for(j in (i+1):CENSUS_COUNT()){
         force(i)
         force(j)
         if (input$calcTypeRadio == "Mortality")
-          tempList = mortality.eachspp(data.frame(censusList[[i]]), data.frame(censusList[[j]]), classbreak = classes())
+          tempList = mortality.eachspp(censusList[[i]], censusList[[j]], classbreak = classes())
         else
           tempList = growth.eachspp(censusList[[i]], censusList[[j]], classbreak = classes())
         func.dataList[[count]] <- list(tempList)
@@ -202,7 +196,7 @@ shinyServer(function(input, output, session) {
       }
       
     }
-    #print(func.dataList)
+    print(func.dataList)
     return(func.dataList)
     
   })
@@ -215,7 +209,7 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$clearAction, {
-    for(i in 1:PAIR_COUNT)
+    for(i in 1:PAIR_COUNT())
     {
       graphList[[i]] <<-"N"
     }
@@ -230,11 +224,12 @@ shinyServer(function(input, output, session) {
   })
   
   observeEvent(input$plotAllAction, {
-    for(i in 1:PAIR_COUNT)
+    print(PAIR_COUNT())
+    for(i in 1:PAIR_COUNT())
     {
       graphList[[i]] <<-"N"
     }
-    for(i in 1:(CENSUS_COUNT-1))
+    for(i in 1:(CENSUS_COUNT() - 1))
     {
       force(i)
       graphList[[calcIndex(i, (i+1))]] <<- "Y"
@@ -261,8 +256,8 @@ shinyServer(function(input, output, session) {
     if(!is.null(func.data()) && !is.null(surveyVector()[2]))
     {
       cat("Rendering")
-      for(i in 1:(CENSUS_COUNT-1)){
-        for(j in (i+1):(CENSUS_COUNT)){
+      for(i in 1:(CENSUS_COUNT() - 1)){
+        for(j in (i+1):(CENSUS_COUNT())){
           force(i)
           force(j)
           index = calcIndex(i,j)
@@ -280,7 +275,7 @@ shinyServer(function(input, output, session) {
     z <- paste(census1,census2, sep="->")
     index = calcIndex(census1, census2)
     lgnd[lgndCount] <<- z
-    lgndColor[plotCount] <<- cl[index]
+    lgndColor[plotCount] <<- cl()[index]
     data = func.data()[[index]]
     y=data[[1]]$rate
     aproblem=is.infinite(y)
@@ -298,7 +293,7 @@ shinyServer(function(input, output, session) {
       yMax <<- yTemp
       updateNumericInput(session, "yNum", value = round(yMax * 1.1, digits = 2))
     }
-    lines(data[[1]]$dbhmean[!aproblem],y[!aproblem],type='l',lwd=2, col = cl[index])#col update
+    lines(data[[1]]$dbhmean[!aproblem],y[!aproblem],type='l',lwd=2, col = cl()[index])#col update
     legend('topright', legend = lgnd , lty=1, col = lgndColor, cex=.75)#col updated
     lgndCount <<- lgndCount + 1
     plotCount <<- plotCount + 1
